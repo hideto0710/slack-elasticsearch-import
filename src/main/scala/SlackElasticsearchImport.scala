@@ -19,16 +19,16 @@ object SlackElasticsearchImport extends App {
 
   // チャネル一覧を取得
   val RequestLimit = 3
-  val result = SlackApiClient.getWithRetry(slack.listChannelsFunc(1), RequestLimit)
+  val result = SlackApiClient.getWithRetry(() => slack.listChannels(1), RequestLimit)
   val channelList = result.flatMap(_.channels).getOrElse(Seq())
   logger.debug(channelList.toString())
 
-  val from = options.getOrElse('from, 0).toString.toLong
-  val to = options.getOrElse('to, 1000000).toString.toLong
+  val from = options.getOrElse('from, "0").toLong
+  val to = options.getOrElse('to, "1000000").toLong
   val targetChannel = options.getOrElse('channel, "all")
   val targetChannels = targetChannel match {
-    case "isMember" => channelList.filter(c => c.is_member)
     case "all" => channelList
+    case "isMember" => channelList.filter(c => c.is_member)
     case _ => channelList.filter(c => c.name == targetChannel)
   }
 

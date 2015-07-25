@@ -65,7 +65,6 @@ class SlackApiClient private (t: String) {
 
   implicit val system = ActorSystem()
   import system.dispatcher
-  import slack.SlackApiClient.FutureFunc
 
   private def makeUri(resource: String, queryParams: (String, String)*): Uri = {
     val resourceUri = Uri(ApiUrl + resource)
@@ -79,9 +78,5 @@ class SlackApiClient private (t: String) {
       sendReceive ~> unmarshal[ChannelChunk],
       requestUri
     )
-  }
-
-  def listChannelsFunc(excludeArchived: Int = 0): FutureFunc[ChannelChunk] = {
-    () => listChannels(excludeArchived)
   }
 }
