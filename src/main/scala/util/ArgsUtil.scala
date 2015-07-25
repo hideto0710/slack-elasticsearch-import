@@ -6,6 +6,7 @@ object ArgsUtil {
 
   private type OptionMap = Map[Symbol, String]
 
+  // TODO: 自動で選択可能な引数を決定したい。
   @tailrec
   def nextOption(list: List[String], map: OptionMap = Map()): OptionMap = list match {
     case "--from" :: value :: tail =>

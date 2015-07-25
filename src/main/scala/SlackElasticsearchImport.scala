@@ -19,7 +19,7 @@ object SlackElasticsearchImport extends App {
   val channelList = result.flatMap(_.channels).getOrElse(Seq())
   logger.debug(channelList.toString())
 
-  // 引数から情報を取得
+  // 引数からオプションを設定
   val argList = args.toList
   val options = ArgsUtil.nextOption(argList)
   val from = options.getOrElse('from, "0").toLong
