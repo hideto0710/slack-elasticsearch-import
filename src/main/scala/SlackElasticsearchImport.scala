@@ -11,33 +11,29 @@ object SlackElasticsearchImport extends App {
 
   val logger = Logger(LoggerFactory.getLogger("SlackElasticsearchImportSpec"))
   val conf = ConfigFactory.load()
-  val slack = SlackApiClient("xoxp-2545467001-2590832085-6650275460-de9ade")
-
-  val RequestLimit = 3
-  val SleepTimeForRetry = 1000
-
-  // チャネル一覧を取得
-  val result = SlackApiClient.getWithRetry(slack.listChannelsFunc(1), RequestLimit, SleepTimeForRetry)
-  val channelList = result.flatMap(_.channels).getOrElse(Seq())
+  val slack = SlackApiClient(conf.getString("slack.token"))
 
   val argList = args.toList
   val options = ArgsUtil.nextOption(argList)
+  logger.info(options.toString())
+
+  // チャネル一覧を取得
+  val RequestLimit = 3
+  val result = SlackApiClient.getWithRetry(slack.listChannelsFunc(1), RequestLimit)
+  val channelList = result.flatMap(_.channels).getOrElse(Seq())
+  logger.debug(channelList.toString())
 
   val from = options.getOrElse('from, 0).toString.toLong
   val to = options.getOrElse('to, 1000000).toString.toLong
   val targetChannel = options.getOrElse('channel, "all")
-
   val targetChannels = targetChannel match {
     case "isMember" => channelList.filter(c => c.is_member)
     case "all" => channelList
     case _ => channelList.filter(c => c.name == targetChannel)
   }
 
-  logger.info(options.toString())
-  logger.info(channelList.toString())
   val channelsStr = targetChannels.map(_.name).mkString(", ")
   logger.info(s"Target Channels: [$channelsStr]")
-  logger.info(conf.getString("slack.test.timezone"))
   sys.exit()
 
   /*

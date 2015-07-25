@@ -15,7 +15,7 @@ import slack.models._
 
 import scala.util.{Failure, Success}
 
-abstract class SlackResponse {
+sealed trait SlackResponse {
   val ok: Boolean
 }
 case class HistoryChunk(ok: Boolean, messages: Option[Seq[SlackComment]], has_more: Option[Boolean]) extends SlackResponse
@@ -37,12 +37,12 @@ object SlackApiClient {
   private val ThreadSleep = 5 * 1000
 
   private def get[A](p: Pipeline[A], uri: Uri): Future[A] = {
-    logger.info(uri.toString())
+    logger.debug(uri.toString())
     p(Get(uri))
   }
 
   private def getFunc[A](p: Pipeline[A], uri: Uri): FutureFunc[A] = {
-    logger.info(uri.toString())
+    logger.debug(uri.toString())
     () => p(Get(uri))
   }
 
