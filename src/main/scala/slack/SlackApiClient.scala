@@ -46,16 +46,20 @@ object SlackApiClient {
   }
 
   @tailrec
-  def getWithRetry[A <: SlackResponse](getFuture: FutureFunc[A], limit: Int, time: Int = ThreadSleep, n: Int = 1): Option[A] = {
+  def tryHttpAwait[A](getFuture: FutureFunc[A], cond: (A) => Boolean, limit: Int, sleepTime: Int, n: Int = 1): Option[A] = {
     if (n > limit) return None
-    if (n > 1) Thread.sleep(time)
+    if (n > 1) Thread.sleep(sleepTime)
     val f = getFuture()
     Await.ready(f, Duration.Inf)
     f.value.get match {
       case Success(result) =>
-        if (result.ok) Some(result) else getWithRetry(getFuture, limit, time, n+1)
-      case Failure(ex) => getWithRetry(getFuture, limit, time, n+1)
+        if (cond(result)) Some(result) else tryHttpAwait(getFuture, cond, limit, sleepTime, n+1)
+      case Failure(ex) => tryHttpAwait(getFuture, cond, limit, sleepTime, n+1)
     }
+  }
+
+  def getWithRetry[A <: SlackResponse](getFuture: FutureFunc[A], limit: Int, sleepTime: Int = ThreadSleep): Option[A] = {
+    tryHttpAwait(getFuture, (result: A) => result.ok, limit, sleepTime)
   }
 }
 
