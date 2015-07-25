@@ -1,10 +1,5 @@
 
 import com.typesafe.config.ConfigFactory
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.util.{Failure, Success}
 import akka.actor.{ActorRef, ActorSystem, Props, Actor}
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
@@ -14,41 +9,36 @@ import util._
 
 object SlackElasticsearchImport extends App {
 
-  private val logger = Logger(LoggerFactory.getLogger("SlackElasticsearchImportSpec"))
-  private val conf = ConfigFactory.load()
+  val logger = Logger(LoggerFactory.getLogger("SlackElasticsearchImportSpec"))
+  val conf = ConfigFactory.load()
+  val slack = SlackApiClient("xoxp-2545467001-2590832085-6650275460-de9ade")
+
+  val RequestLimit = 3
+  val SleepTimeForRetry = 1000
 
   // チャネル一覧を取得
-  val f = SlackApiClient.listChannels(1)
-  Await.ready(f, Duration.Inf)
-  f.value.get match {
-    case Success(result) =>
-      result.ok match {
-        case true => logger.info(result.channels.toString)
-        case false =>
-      }
-    case Failure(ex) =>
-      logger.error(ex.getCause.toString)
-      sys.exit()
-  }
+  val result = SlackApiClient.getWithRetry(slack.listChannelsFunc(1), RequestLimit, SleepTimeForRetry)
+  val channelList = result.flatMap(_.channels).getOrElse(Seq())
 
   val argList = args.toList
   val options = ArgsUtil.nextOption(argList)
 
   val from = options.getOrElse('from, 0).toString.toLong
   val to = options.getOrElse('to, 1000000).toString.toLong
-  val channel = options.getOrElse('channel, "")
-  // TODO: channel.listを事前に取得する。
-  val allChannels = List()
+  val targetChannel = options.getOrElse('channel, "all")
 
-  val domainList: List[String] = channel match {
-    case "" => allChannels
-    case _ => List(channel)
+  val targetChannels = targetChannel match {
+    case "isMember" => channelList.filter(c => c.is_member)
+    case "all" => channelList
+    case _ => channelList.filter(c => c.name == targetChannel)
   }
 
   logger.info(options.toString())
-  logger.info(domainList.toString())
+  logger.info(channelList.toString())
+  val channelsStr = targetChannels.map(_.name).mkString(", ")
+  logger.info(s"Target Channels: [$channelsStr]")
   logger.info(conf.getString("slack.test.timezone"))
-
+  sys.exit()
 
   /*
   // Create the 'helloakka' actor system
