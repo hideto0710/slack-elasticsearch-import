@@ -17,16 +17,27 @@ import scala.util.{Failure, Success}
 
 sealed trait SlackResponse {
   val ok: Boolean
+  val error: Option[String]
 }
-case class HistoryChunk(ok: Boolean, messages: Option[Seq[SlackComment]], has_more: Option[Boolean]) extends SlackResponse
-case class ChannelChunk(ok: Boolean, channels: Option[Seq[Channel]]) extends SlackResponse
+case class HistoryChunk(
+  ok: Boolean,
+  error: Option[String],
+  messages: Option[Seq[SlackComment]],
+  has_more: Option[Boolean]
+) extends SlackResponse
+
+case class ChannelChunk(
+  ok: Boolean,
+  error: Option[String],
+  channels: Option[Seq[Channel]]
+) extends SlackResponse
 
 object SlackJsonProtocol extends DefaultJsonProtocol {
   implicit val slackCommentFmt = jsonFormat4(SlackComment)
-  implicit val historyChunkFmt = jsonFormat3(HistoryChunk)
+  implicit val historyChunkFmt = jsonFormat4(HistoryChunk)
   implicit val channelValueFmt = jsonFormat3(ChannelValue)
   implicit val channelFmt = jsonFormat12(Channel)
-  implicit val channelChunkFmt = jsonFormat2(ChannelChunk)
+  implicit val channelChunkFmt = jsonFormat3(ChannelChunk)
 }
 import SlackJsonProtocol._
 
@@ -34,7 +45,7 @@ object SlackApiClient {
   private type Pipeline[A] = (HttpRequest) => Future[A]
   private type FutureFunc[A] = () => Future[A]
   private val logger = Logger(LoggerFactory.getLogger("SlackApiClient"))
-  private val ThreadSleep = 5 * 1000
+  private val Sleep = 5 * 1000
 
   private def get[A](p: Pipeline[A], uri: Uri): Future[A] = {
     logger.debug(uri.toString())
@@ -42,15 +53,16 @@ object SlackApiClient {
   }
 
   @tailrec
-   private def tryHttpAwait[A](getFuture: FutureFunc[A], cond: (A) => Boolean, limit: Int, sleepTime: Int, n: Int = 1): Option[A] = {
-    if (n > limit) return None
-    if (n > 1) Thread.sleep(sleepTime)
+   private def tryHttpAwait[A](getFuture: FutureFunc[A], limit: Int, sleepTime: Int, n: Int=1): Either[Throwable, A] = {
+    if (n > 1) {
+      logger.debug(s"tryHttpAwait sleep $sleepTime ms")
+      Thread.sleep(sleepTime)
+    }
     val f = getFuture()
     Await.ready(f, Duration.Inf)
     f.value.get match {
-      case Success(result) =>
-        if (cond(result)) Some(result) else tryHttpAwait(getFuture, cond, limit, sleepTime, n+1)
-      case Failure(ex) => tryHttpAwait(getFuture, cond, limit, sleepTime, n+1)
+      case Success(result) => Right(result)
+      case Failure(ex) => if (n < limit) tryHttpAwait(getFuture, limit, sleepTime, n+1) else Left(ex)
     }
   }
 
@@ -58,8 +70,12 @@ object SlackApiClient {
     new SlackApiClient(t)
   }
 
-  def getWithRetry[A <: SlackResponse](getFuture: FutureFunc[A], limit: Int, sleepTime: Int = ThreadSleep): Option[A] = {
-    tryHttpAwait(getFuture, (result: A) => result.ok, limit, sleepTime)
+  def getWithRetry[A<:SlackResponse](getFuture: FutureFunc[A], limit: Int, sleepTime: Int=Sleep): Either[String, A] = {
+    val result = tryHttpAwait(getFuture, limit, sleepTime)
+    result match {
+      case Right(x) => if (x.ok) Right(x) else Left(x.error.getOrElse("unknown_error"))
+      case Left(ex) => Left(ex.getMessage)
+    }
   }
 }
 
