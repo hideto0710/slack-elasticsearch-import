@@ -9,32 +9,43 @@ import util._
 
 object SlackElasticsearchImport extends App {
 
-  val logger = Logger(LoggerFactory.getLogger("SlackElasticsearchImportSpec"))
+  val logger = Logger(LoggerFactory.getLogger("SlackElasticsearchImport"))
   val conf = ConfigFactory.load()
   val slack = SlackApiClient(conf.getString("slack.token"))
+  val ErrorExitCode = 1
 
   // チャネル一覧を取得
   val RequestLimit = conf.getInt("slack.requestLimit")
   val result = SlackApiClient.getWithRetry(() => slack.listChannels(1), RequestLimit)
-  val channelList = result.flatMap(_.channels).getOrElse(Seq())
+  val channelList = result match {
+    case Right(r) => r.channels.getOrElse(Seq())
+    case Left(e) => // MARK: channel.list取得エラー
+      logger.error(s"SlackApiClient [$e] ERROR")
+      sys.exit(ErrorExitCode)
+  }
   logger.debug(channelList.toString())
 
-  // 引数からオプションを設定
+  // オプションを設定
   val argList = args.toList
   val options = ArgsUtil.nextOption(argList)
-  val from = options.getOrElse('from, "0").toLong
-  val to = options.getOrElse('to, "1000000").toLong
+  val from = options.getOrElse('from, 0.toString).toLong
+  val to = options.getOrElse('to, 1000000.toString).toLong
+  logger.info(s"Options: [from: $from, to: $to]")
+
+  // インポート対象チャネルを設定
   val targetChannel = options.getOrElse('channel, "all")
   val targetChannels = targetChannel match {
     case "all" => channelList
     case "isMember" => channelList.filter(c => c.is_member)
     case _ => channelList.filter(c => c.name == targetChannel)
   }
+  if (targetChannels.isEmpty) { // MARK: インポート対象チャネル設定エラー
+    logger.error("No Channels ERROR")
+    sys.exit(ErrorExitCode)
+  }
 
-  logger.info(s"Options: [from: $from, to: $to]")
-  val channelsStr = targetChannels.map(_.name).mkString(", ")
-  logger.info(s"Target Channels: [$channelsStr]")
-  sys.exit()
+  logger.info("Target Channels: [%s]".format(targetChannels.map(_.name).mkString(", ")))
+  sys.exit(0)
 
   /*
   // Create the 'helloakka' actor system
