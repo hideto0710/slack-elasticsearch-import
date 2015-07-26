@@ -43,7 +43,6 @@ import SlackJsonProtocol._
 
 object SlackApiClient {
   private type Pipeline[A] = (HttpRequest) => Future[A]
-  private type FutureFunc[A] = () => Future[A]
   private val logger = Logger(LoggerFactory.getLogger("SlackApiClient"))
   private val Sleep = 5 * 1000
 
@@ -53,12 +52,12 @@ object SlackApiClient {
   }
 
   @tailrec
-   private def tryHttpAwait[A](getFuture: FutureFunc[A], limit: Int, sleepTime: Int, n: Int=1): Either[Throwable, A] = {
+   private def tryHttpAwait[A](getFuture: => Future[A], limit: Int, sleepTime: Int, n: Int=1): Either[Throwable, A] = {
     if (n > 1) {
       logger.debug(s"tryHttpAwait sleep $sleepTime ms")
       Thread.sleep(sleepTime)
     }
-    val f = getFuture()
+    val f = getFuture
     Await.ready(f, Duration.Inf)
     f.value.get match {
       case Success(result) => Right(result)
@@ -70,7 +69,7 @@ object SlackApiClient {
     new SlackApiClient(t)
   }
 
-  def getWithRetry[A<:SlackResponse](getFuture: FutureFunc[A], limit: Int, sleepTime: Int=Sleep): Either[String, A] = {
+  def getWithRetry[A<:SlackResponse](getFuture: => Future[A], limit: Int, sleepTime: Int=Sleep): Either[String, A] = {
     val result = tryHttpAwait(getFuture, limit, sleepTime)
     result match {
       case Right(x) => if (x.ok) Right(x) else Left(x.error.getOrElse("unknown_error"))

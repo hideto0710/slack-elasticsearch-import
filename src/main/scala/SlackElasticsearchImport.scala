@@ -16,7 +16,7 @@ object SlackElasticsearchImport extends App {
 
   // チャネル一覧を取得
   val RequestLimit = conf.getInt("slack.requestLimit")
-  val result = SlackApiClient.getWithRetry(() => slack.listChannels(1), RequestLimit)
+  val result = SlackApiClient.getWithRetry(slack.listChannels(1), RequestLimit)
   val channelList = result match {
     case Right(r) => r.channels.getOrElse(Seq())
     case Left(e) => // MARK: channel.list取得エラー
@@ -43,7 +43,6 @@ object SlackElasticsearchImport extends App {
     logger.error("No Channels ERROR")
     sys.exit(ErrorExitCode)
   }
-
   logger.info("Target Channels: [%s]".format(targetChannels.map(_.name).mkString(", ")))
   sys.exit(0)
 
