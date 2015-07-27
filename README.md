@@ -1,7 +1,7 @@
 SlackElasticsearchImport
 ===
 
-#作成中
+#== 作成中 ==
 
 ##概要
 `Slack API` で取得したデータを `Elasticsearch` にインポートする `Scala` プログラム。（並行処理に `Akka` を利用）
@@ -12,5 +12,6 @@ SlackElasticsearchImport
 - [Slack API](https://api.slack.com/)
 
 ##実行
-実行： `$ ./activator 'runMain HelloAkkaScala --from 100'`
-ユニットテスト：`$ ./activator test`
+実行： `$ ./activator 'runMain HelloAkkaScala --from 100'`  
+ユニットテスト： `$ ./activator test`  
+ドキュメント： `$ ./activator doc`
