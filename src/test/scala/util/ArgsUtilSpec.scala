@@ -10,7 +10,7 @@ class ArgsUtilSpec() extends FlatSpec() with Matchers {
   }
 
   it should "not be able to get arguments" in {
-    val optionList = List("from", "10", "to", "299")
+    val optionList = List("from", "10", "to", "299", "-channel", "all")
     ArgsUtil.nextOption(optionList) should be (Map())
   }
 }
