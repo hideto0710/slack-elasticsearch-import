@@ -136,6 +136,7 @@ object SlackApiClient {
  * Slackへのリクエスト用のHTTPClient
  * @constructor SlackApiClientのインスタンスをトークンから作成
  * @param t トークン
+ * @version 0.1
  */
 class SlackApiClient private (t: String) {
   private val token = t

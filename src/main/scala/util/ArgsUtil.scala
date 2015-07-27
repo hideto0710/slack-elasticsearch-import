@@ -6,6 +6,7 @@ import scala.annotation.tailrec
  * コマンドライン引数処理用のUtility
  *
  * コマンドライン引数の処理に関わるUtilityMethodを提供する。
+ * @version 0.1
  */
 object ArgsUtil {
 
