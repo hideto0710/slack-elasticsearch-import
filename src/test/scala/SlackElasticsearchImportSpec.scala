@@ -1,6 +1,6 @@
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
-import akka.actor.{ Props, ActorSystem }
-import akka.testkit.{ ImplicitSender, TestKit, TestActorRef }
+import akka.actor.{Props, ActorSystem}
+import akka.testkit.{ImplicitSender, TestKit, TestActorRef}
 import scala.concurrent.duration._
 
 class SlackElasticsearchImportSpec(_system: ActorSystem)
