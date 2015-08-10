@@ -66,9 +66,16 @@ import SlackJsonProtocol._
  */
 object SlackApiClient {
 
+  case class Slack(token: String)
+
   private type Pipeline[A] = (HttpRequest) => Future[A]
+  private val ApiUrl = "https://slack.com/api/"
   private val logger = Logger(LoggerFactory.getLogger("SlackApiClient"))
   private val Sleep = 5 * 1000
+
+  implicit val system = ActorSystem()
+
+  import system.dispatcher
 
   /**
    * GETリクエストのFutureを返す。
@@ -121,15 +128,6 @@ object SlackApiClient {
   }
 
   /**
-   * SlackApiClientのインスタンスを返す。
-   * @param t トークン
-   * @return SlackApiClient
-   */
-  def apply(t: String) = {
-    new SlackApiClient(t)
-  }
-
-  /**
    * 同期リクエストのレスポンスを返す。
    * @param getFuture Future（非同期リクエスト）
    * @param limit リクエスト試行回数制限
@@ -145,25 +143,10 @@ object SlackApiClient {
       case Left(e) => Left(e.getMessage)
     }
   }
-}
-
-/**
- * Slackへのリクエスト用のHTTPClient
- * @constructor SlackApiClientのインスタンスをトークンから作成
- * @param t トークン
- * @version 0.1
- */
-class SlackApiClient private (t: String) {
-  private val token = t
-  private val ApiUrl = "https://slack.com/api/"
-
-  implicit val system = ActorSystem()
-  import system.dispatcher
 
   private def makeUri(resource: String, queryParams: (String, Any)*): Uri = {
     val resourceUri = Uri(ApiUrl + resource)
-    val queryMap = SlackApiClient.cleanMap(queryParams.toMap) ++ Map("token" -> token)
-    resourceUri withQuery queryMap
+    resourceUri withQuery SlackApiClient.cleanMap(queryParams.toMap)
   }
 
   /**
@@ -171,8 +154,8 @@ class SlackApiClient private (t: String) {
    * @param excludeArchived アーカイブチャネルの排除フラグ
    * @return channel.listのFuture
    */
-  def listChannels(excludeArchived: Int = 0): Future[ChannelChunk] = {
-    val requestUri = makeUri("channels.list", "exclude_archived" -> excludeArchived)
+  def listChannels(excludeArchived: Int = 0)(implicit s:Slack): Future[ChannelChunk] = {
+    val requestUri = makeUri("channels.list", "token" -> s.token, "exclude_archived" -> excludeArchived)
     SlackApiClient.get[ChannelChunk](
       sendReceive ~> unmarshal[ChannelChunk],
       requestUri
@@ -190,13 +173,13 @@ class SlackApiClient private (t: String) {
    */
   def channelsHistory(
     channel: String,
-    latest: Long = None,
-    oldest: Long = None,
-    inclusive: Int = None,
-    count: Int = None
-  ): Future[HistoryChunk] = {
+    latest: Option[Long] = None,
+    oldest: Option[Long] = None,
+    inclusive: Option[Int] = None,
+    count: Option[Int] = None
+  )(implicit s:Slack): Future[HistoryChunk] = {
     val requestUri = makeUri(
-      "channels.history",
+      "channels.history", "token" -> s.token,
       "channel" -> channel, "latest" -> latest, "oldest" -> oldest, "inclusive" -> inclusive, "count" -> count
     )
     SlackApiClient.get[HistoryChunk](

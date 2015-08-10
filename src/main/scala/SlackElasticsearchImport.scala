@@ -1,6 +1,7 @@
 
 import scala.util.{Success, Failure}
 import scala.concurrent.duration
+import scala.concurrent.ExecutionContext.Implicits.global
 
 import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
@@ -10,6 +11,7 @@ import org.slf4j.LoggerFactory
 
 import slack._
 import slack.models.SlackComment
+import slack.SlackApiClient.Slack
 import util._
 
 case class Channel(id: String, name: String)
@@ -18,12 +20,13 @@ object SlackElasticsearchImport extends App {
 
   val logger = Logger(LoggerFactory.getLogger("SlackElasticsearchImport"))
   val conf = ConfigFactory.load()
-  val slack = SlackApiClient(conf.getString("slack.token"))
   val ErrorExitCode = 1
+
+  implicit val slack = Slack(conf.getString("slack.token"))
 
   // チャネル一覧を取得
   val RequestLimit = conf.getInt("slack.requestLimit")
-  val channelResult = SlackApiClient.syncRequest(slack.listChannels(1), RequestLimit)
+  val channelResult = SlackApiClient.syncRequest(SlackApiClient.listChannels(1), RequestLimit)
   val channelList = channelResult match {
     case Right(r) => r.channels.getOrElse(Seq())
     case Left(e) => // MARK: channel.list取得エラー
@@ -83,7 +86,7 @@ class SlackActor extends Actor {
 
 class SlackChannelActor extends Actor {
   val conf = ConfigFactory.load()
-  val slack = SlackApiClient(conf.getString("slack.token"))
+  implicit val slack = Slack(conf.getString("slack.token"))
 
   def more(c: Channel, m: Seq[SlackComment]) = {
     val latest = m.last.ts.toLong
@@ -93,7 +96,7 @@ class SlackChannelActor extends Actor {
 
   def receive = {
     case start: SlackFetchStart =>
-      val result = SlackApiClient.syncRequest(slack.channelsHistory(start.channel.id), 1)
+      val result = SlackApiClient.syncRequest(SlackApiClient.channelsHistory(start.channel.id), 1)
       result match {
         case Right(r) =>
           val messages = r.messages.getOrElse(Seq()) // TODO:結果0件のときのエラー処理
@@ -103,7 +106,7 @@ class SlackChannelActor extends Actor {
       }
 
     case req: SlackFetchRequest =>
-      val result = SlackApiClient.syncRequest(slack.channelsHistory(req.channel.id, latest=req.latest, oldest=req.oldest), 1)
+      val result = SlackApiClient.syncRequest(SlackApiClient.channelsHistory(req.channel.id, latest=Some(req.latest), oldest=Some(req.oldest)), 1)
       result match {
         case Right(r) =>
           val messages = r.messages.getOrElse(Seq()) // TODO:結果0件のときのエラー処理
