@@ -50,7 +50,7 @@ case class ChannelChunk(
 ) extends SlackResponse
 
 object SlackJsonProtocol extends DefaultJsonProtocol {
-  implicit val slackCommentFmt = jsonFormat4(SlackComment)
+  implicit val slackCommentFmt = jsonFormat5(SlackComment)
   implicit val historyChunkFmt = jsonFormat4(HistoryChunk)
   implicit val channelValueFmt = jsonFormat3(ChannelValue)
   implicit val channelFmt = jsonFormat12(Channel)
@@ -111,11 +111,13 @@ object SlackApiClient {
    * Noneを排除し、valueをStringに変換したMapを返す。
    * @param map Noneを含んだMap
    * @return Noneが排除されたMap
+   * @todo Someでラップしなくても良い方法を検討する。
    */
   private def cleanMap(map: Map[String, Any]): Map[String, String] = {
-    map.collect {
-      case (k, Some(v)) => (k, v.toString)
-    }
+    map.map {
+      case (k, None) => (k, None)
+      case (k, v) => (k, Some(v.toString))
+    }.collect { case (k, Some(v)) => (k, v) }
   }
 
   /**
@@ -188,10 +190,10 @@ class SlackApiClient private (t: String) {
    */
   def channelsHistory(
     channel: String,
-    latest: Option[Long] = None,
-    oldest: Option[Long] = None,
-    inclusive: Option[Int] = None,
-    count: Option[Int] = None
+    latest: Long = None,
+    oldest: Long = None,
+    inclusive: Int = None,
+    count: Int = None
   ): Future[HistoryChunk] = {
     val requestUri = makeUri(
       "channels.history",
