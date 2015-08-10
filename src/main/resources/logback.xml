@@ -1,10 +1,23 @@
 <configuration>
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>/usr/local/var/log/scala/slack-elasticsearch-importer/application.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>/usr/local/var/log/scala/slack-elasticsearch-importer/application.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>14</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <charset>UTF-8</charset>
+            <pattern>time:%date{ISO8601}&#x9;level:%level&#x9;logger:%logger&#x9;thread:%thread&#x9;msg:%replace(%replace(%message){'\n','\\n'}){'\t',' '}&#x9;exception:%replace(%replace(%xException{5}){'\n','\\n'}){'\t',' '}%n%nopex</pattern>
+            <immediateFlush>true</immediateFlush>
+        </encoder>
+    </appender>
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{HH:mm:ss} %-5level [%thread] %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
     <root level="DEBUG">
+        <appender-ref ref="FILE" />
         <appender-ref ref="STDOUT" />
     </root>
 </configuration>
