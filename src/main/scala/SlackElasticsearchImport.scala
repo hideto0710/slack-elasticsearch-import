@@ -1,11 +1,18 @@
 
+import scala.util.{Success, Failure}
+import scala.concurrent.duration
+
+import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
-import akka.actor.{ActorRef, ActorSystem, Props, Actor}
+import akka.actor.{ActorSystem, Props, Actor}
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
 
 import slack._
+import slack.models.SlackComment
 import util._
+
+case class Channel(id: String, name: String)
 
 object SlackElasticsearchImport extends App {
 
@@ -16,8 +23,8 @@ object SlackElasticsearchImport extends App {
 
   // チャネル一覧を取得
   val RequestLimit = conf.getInt("slack.requestLimit")
-  val result = SlackApiClient.syncRequest(slack.listChannels(1), RequestLimit)
-  val channelList = result match {
+  val channelResult = SlackApiClient.syncRequest(slack.listChannels(1), RequestLimit)
+  val channelList = channelResult match {
     case Right(r) => r.channels.getOrElse(Seq())
     case Left(e) => // MARK: channel.list取得エラー
       logger.error(s"SlackApiClient [$e] ERROR")
@@ -43,44 +50,78 @@ object SlackElasticsearchImport extends App {
     sys.exit(ErrorExitCode)
   }
   logger.info("Target Channels: [%s]".format(targetChannels.map(_.name).mkString(", ")))
-  sys.exit(0)
 
-  /*
-  // Create the 'helloakka' actor system
-  val system = ActorSystem("helloakka")
+  val system = ActorSystem()
+  val slackActor = system.actorOf(Props[SlackActor], "slack")
 
-  // Create the 'greeter' actor
-  val greeter = system.actorOf(Props[Greeter], "greeter")
+  targetChannels.foreach( t => slackActor ! Channel(t.id, t.name) )
 
-  // Create an "actor-in-a-box"
-  val inbox = Inbox.create(system)
-
-  // Tell the 'greeter' to change its 'greeting' message
-  greeter.tell(WhoToGreet("akka"), ActorRef.noSender)
-
-  // Ask the 'greeter for the latest 'greeting'
-  // Reply should go to the "actor-in-a-box"
-  inbox.send(greeter, Greet)
-
-  // Wait 5 seconds for the reply with the 'greeting' message
-  val Greeting(message1) = inbox.receive(5.seconds)
-  println(s"Greeting: $message1")
-
-  // Change the greeting and ask for it again
-  greeter.tell(WhoToGreet("typesafe"), ActorRef.noSender)
-  inbox.send(greeter, Greet)
-  val Greeting(message2) = inbox.receive(5.seconds)
-  println(s"Greeting: $message2")
-
-  val greetPrinter = system.actorOf(Props[GreetPrinter])
-  // after zero seconds, send a Greet message every second to the greeter with a sender of the greetPrinter
-  system.scheduler.schedule(0.seconds, 1.second, greeter, Greet)(system.dispatcher, greetPrinter)
-  */
+  //sys.exit(0)
 }
 
 case object Greet
 case class WhoToGreet(who: String)
 case class Greeting(message: String)
+
+case class SlackFetchStart(channel: Channel)
+case class SlackFetchRequest(channel: Channel, latest: Long, oldest: Long)
+case class ESImportRequest(channel: Channel, messages: Seq[SlackComment])
+
+class SlackActor extends Actor {
+  implicit val timeout = Timeout(5, duration.SECONDS)
+  def receive = {
+    case channel: Channel =>
+      context.actorSelection(channel.name).resolveOne().onComplete {
+        case Success(actor) =>
+          actor ! SlackFetchStart(channel)
+        case Failure(e) =>
+          val actor = context.actorOf(Props[SlackChannelActor], channel.name)
+          actor ! SlackFetchStart(channel)
+      }
+  }
+}
+
+class SlackChannelActor extends Actor {
+  val conf = ConfigFactory.load()
+  val slack = SlackApiClient(conf.getString("slack.token"))
+
+  def more(c: Channel, m: Seq[SlackComment]) = {
+    val latest = m.last.ts.toLong
+    val oldest = 0 // TODO:オプションを参照
+    self ! SlackFetchRequest(c, latest, oldest)
+  }
+
+  def receive = {
+    case start: SlackFetchStart =>
+      val result = SlackApiClient.syncRequest(slack.channelsHistory(start.channel.id), 1)
+      result match {
+        case Right(r) =>
+          val messages = r.messages.getOrElse(Seq()) // TODO:結果0件のときのエラー処理
+          context.actorOf(Props[ESActor]) ! ESImportRequest(start.channel, messages)
+          if(r.has_more.getOrElse(false)) more(start.channel, messages)
+        case Left(e) => // TODO:コメント取得時のエラー処理
+      }
+
+    case req: SlackFetchRequest =>
+      val result = SlackApiClient.syncRequest(slack.channelsHistory(req.channel.id, latest=req.latest, oldest=req.oldest), 1)
+      result match {
+        case Right(r) =>
+          val messages = r.messages.getOrElse(Seq()) // TODO:結果0件のときのエラー処理
+          context.actorOf(Props[ESActor]) ! ESImportRequest(req.channel, messages)
+          if(r.has_more.getOrElse(false)) more(req.channel, messages)
+        case Left(e) => // TODO:コメント取得時のエラー処理
+      }
+  }
+}
+
+class ESActor extends Actor {
+  def receive = {
+    case ESImportRequest(channel, messages) =>
+      println(channel)
+      println(messages.head)
+  }
+}
+
 
 class Greeter extends Actor {
   var greeting = ""
