@@ -50,8 +50,9 @@ case class ChannelValue(
  * @param ts 日時（UNIX時刻）
  */
 case class SlackComment(
-  subtype: String,
-  user: String,
+  subtype: Option[String],
+  user: Option[String],
+  username: Option[String],
   text: String,
   ts: String
 )
