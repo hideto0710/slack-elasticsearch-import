@@ -4,8 +4,8 @@ import scala.concurrent.duration
 import scala.concurrent.ExecutionContext.Implicits.global
 
 import akka.util.Timeout
+import akka.actor._
 import com.typesafe.config.ConfigFactory
-import akka.actor.{ActorSystem, Props, Actor}
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
 
@@ -55,11 +55,10 @@ object SlackElasticsearchImport extends App {
   logger.info("Target Channels: [%s]".format(targetChannels.map(_.name).mkString(", ")))
 
   val system = ActorSystem()
-  val slackActor = system.actorOf(Props[SlackActor], "slack")
+  val esActor = system.actorOf(Props[ESActor], "es")
+  val slackActor = system.actorOf(Props(classOf[MainActor], esActor), "slack")
 
   targetChannels.foreach( t => slackActor ! Channel(t.id, t.name) )
-
-  //sys.exit(0)
 }
 
 case object Greet
@@ -70,21 +69,23 @@ case class SlackFetchStart(channel: Channel)
 case class SlackFetchRequest(channel: Channel, latest: Long, oldest: Long)
 case class ESImportRequest(channel: Channel, messages: Seq[SlackComment])
 
-class SlackActor extends Actor {
+class MainActor(es:ActorRef) extends Actor {
   implicit val timeout = Timeout(5, duration.SECONDS)
+
+  // TODO: 並行処理数を制限
   def receive = {
     case channel: Channel =>
       context.actorSelection(channel.name).resolveOne().onComplete {
         case Success(actor) =>
           actor ! SlackFetchStart(channel)
         case Failure(e) =>
-          val actor = context.actorOf(Props[SlackChannelActor], channel.name)
+          val actor = context.actorOf(Props(classOf[SlackActor], es), channel.name)
           actor ! SlackFetchStart(channel)
       }
   }
 }
 
-class SlackChannelActor extends Actor {
+class SlackActor(es:ActorRef) extends Actor {
   val conf = ConfigFactory.load()
   implicit val slack = Slack(conf.getString("slack.token"))
 
@@ -100,8 +101,8 @@ class SlackChannelActor extends Actor {
       result match {
         case Right(r) =>
           val messages = r.messages.getOrElse(Seq()) // TODO:結果0件のときのエラー処理
-          context.actorOf(Props[ESActor]) ! ESImportRequest(start.channel, messages)
-          if(r.has_more.getOrElse(false)) more(start.channel, messages)
+          es ! ESImportRequest(start.channel, messages)
+          //if(r.has_more.getOrElse(false)) more(start.channel, messages)
         case Left(e) => // TODO:コメント取得時のエラー処理
       }
 
@@ -110,18 +111,19 @@ class SlackChannelActor extends Actor {
       result match {
         case Right(r) =>
           val messages = r.messages.getOrElse(Seq()) // TODO:結果0件のときのエラー処理
-          context.actorOf(Props[ESActor]) ! ESImportRequest(req.channel, messages)
-          if(r.has_more.getOrElse(false)) more(req.channel, messages)
+          es ! ESImportRequest(req.channel, messages)
+          //if(r.has_more.getOrElse(false)) more(req.channel, messages)
         case Left(e) => // TODO:コメント取得時のエラー処理
       }
   }
 }
 
-class ESActor extends Actor {
+class ESActor extends Actor with ActorLogging  {
+  // TODO: Elasticsearchへのインポート処理
   def receive = {
     case ESImportRequest(channel, messages) =>
-      println(channel)
-      println(messages.head)
+      log.info(channel.name)
+      log.info(messages.head.text)
   }
 }
 
