@@ -1,4 +1,4 @@
-package util
+package com.hideto0710.util
 
 import scala.annotation.tailrec
 

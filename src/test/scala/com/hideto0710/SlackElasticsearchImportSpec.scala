@@ -1,9 +1,12 @@
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
-import akka.actor.{Props, ActorSystem}
-import akka.testkit.{ImplicitSender, TestKit, TestActorRef}
-import slack.models.SlackComment
+package com.hideto0710
+
 import scala.collection.mutable
 import scala.concurrent.duration._
+import _root_.akka.actor.{ActorSystem, Props}
+import _root_.akka.testkit.{ImplicitSender, TestActorRef, TestKit}
+import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import com.hideto0710.akka.actor.{Channel, ESActor, SlackFetchResponse}
+import com.hideto0710.slack.models.SlackComment
 
 class SlackElasticsearchImportSpec(_system: ActorSystem)
   extends TestKit(_system)

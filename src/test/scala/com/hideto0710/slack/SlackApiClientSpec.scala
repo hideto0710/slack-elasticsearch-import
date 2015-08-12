@@ -1,11 +1,11 @@
-package slack
+package com.hideto0710.slack
 
-import org.scalatest.{Matchers, FlatSpec}
 import com.typesafe.config.ConfigFactory
+import org.scalatest.{FlatSpec, Matchers}
+import com.hideto0710.slack.SlackApiClient.Slack
+
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
-
-import slack.SlackApiClient.Slack
 
 class SlackApiClientSpec extends FlatSpec() with Matchers {
 

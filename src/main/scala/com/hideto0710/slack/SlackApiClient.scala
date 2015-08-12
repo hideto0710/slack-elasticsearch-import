@@ -1,8 +1,9 @@
-package slack
+package com.hideto0710.slack
 
 import scala.annotation.tailrec
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
+import scala.util.{Failure, Success}
 import akka.actor.ActorSystem
 import spray.http._
 import spray.json._
@@ -10,10 +11,7 @@ import spray.httpx.SprayJsonSupport._
 import spray.client.pipelining._
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
-
-import slack.models._
-
-import scala.util.{Failure, Success}
+import com.hideto0710.slack.models._
 
 /**
  * SlackAPIのレスポンス

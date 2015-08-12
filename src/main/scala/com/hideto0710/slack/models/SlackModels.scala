@@ -1,4 +1,4 @@
-package slack.models
+package com.hideto0710.slack.models
 
 /**
  * channelの情報

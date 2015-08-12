@@ -14,5 +14,5 @@ SlackElasticsearchImport
 ##実行
 実行： `$ ./activator 'runMain HelloAkkaScala --from 100'`  
 ユニットテスト： `$ ./activator test`  
-個別ユニットテスト： `$ ./activator 'testOnly slack.SlackApiClientSpec'`
+個別ユニットテスト： `$ ./activator 'testOnly com.hideto0710.slack.SlackApiClientSpec'`
 ドキュメント： `$ ./activator doc`
