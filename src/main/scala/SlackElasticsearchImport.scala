@@ -62,22 +62,21 @@ object SlackElasticsearchImport extends App {
 }
 
 
-case class SlackFetchStart(channel: Channel)
-case class SlackFetchRequest(channel: Channel, latest: Long, oldest: Long)
-case class ESImportRequest(channel: Channel, messages: Seq[SlackComment])
+case class SlackFetchRequest(channel: Channel, latest: Option[Long], oldest: Option[Long])
+case class SlackFetchResponse(channel: Channel, messages: Seq[SlackComment])
 
 class MainActor(out:ActorRef) extends Actor {
   implicit val timeout = Timeout(5, duration.SECONDS)
 
   // TODO: 並行処理数を制限
   def receive = {
-    case channel: Channel =>
-      context.actorSelection(channel.name).resolveOne().onComplete {
+    case Channel(id, name) =>
+      context.actorSelection(name).resolveOne().onComplete {
         case Success(actor) =>
-          actor ! SlackFetchStart(channel)
+          actor ! SlackFetchRequest(Channel(id, name), None, None)
         case Failure(e) =>
-          val actor = context.actorOf(Props(classOf[SlackActor], out), channel.name)
-          actor ! SlackFetchStart(channel)
+          val actor = context.actorOf(Props(classOf[SlackActor], out), name)
+          actor ! SlackFetchRequest(Channel(id, name), None, None)
       }
   }
 }
@@ -86,30 +85,18 @@ class SlackActor(out:ActorRef) extends Actor {
   val conf = ConfigFactory.load()
   implicit val slack = Slack(conf.getString("slack.token"))
 
-  def more(c: Channel, m: Seq[SlackComment]) = {
-    val latest = m.last.ts.toLong
-    val oldest = 0 // TODO:オプションを参照
-    self ! SlackFetchRequest(c, latest, oldest)
-  }
-
   def receive = {
-    case start: SlackFetchStart =>
-      val result = SlackApiClient.syncRequest(SlackApiClient.channelsHistory(start.channel.id), 1)
+    case SlackFetchRequest(c, latest, oldest) =>
+      val result = SlackApiClient.syncRequest(SlackApiClient.channelsHistory(c.id, latest=latest, oldest=oldest), 1)
       result match {
         case Right(r) =>
-          val messages = r.messages.getOrElse(Seq()) // TODO:結果0件のときのエラー処理
-          out ! ESImportRequest(start.channel, messages)
-          if(r.has_more.getOrElse(false)) more(start.channel, messages)
-        case Left(e) => // TODO:コメント取得時のエラー処理
-      }
-
-    case req: SlackFetchRequest =>
-      val result = SlackApiClient.syncRequest(SlackApiClient.channelsHistory(req.channel.id, latest=Some(req.latest), oldest=Some(req.oldest)), 1)
-      result match {
-        case Right(r) =>
-          val messages = r.messages.getOrElse(Seq()) // TODO:結果0件のときのエラー処理
-          out ! ESImportRequest(req.channel, messages)
-          if(r.has_more.getOrElse(false)) more(req.channel, messages)
+          val ms = r.messages.getOrElse(Seq()) // TODO:結果0件のときのエラー処理
+          out ! SlackFetchResponse(c, ms)
+          if(r.has_more.getOrElse(false)) {
+            val latest = ms.last.ts.toLong
+            val oldest = None // TODO:オプションを参照
+            self ! SlackFetchRequest(c, Some(latest), oldest)
+          }
         case Left(e) => // TODO:コメント取得時のエラー処理
       }
   }
@@ -120,7 +107,7 @@ class ESActor extends Actor with ActorLogging  {
   val data = mutable.Map[String, List[SlackComment]]()
   // TODO: Elasticsearchへのインポート処理
   def receive = {
-    case ESImportRequest(channel, messages) =>
+    case SlackFetchResponse(channel, messages) =>
       data.get(channel.id) match {
         case Some(v) => data(channel.id) = v ::: messages.toList
         case _ => data(channel.id) = messages.toList
