@@ -61,15 +61,12 @@ object SlackElasticsearchImport extends App {
   targetChannels.foreach( t => slackActor ! Channel(t.id, t.name) )
 }
 
-case object Greet
-case class WhoToGreet(who: String)
-case class Greeting(message: String)
 
 case class SlackFetchStart(channel: Channel)
 case class SlackFetchRequest(channel: Channel, latest: Long, oldest: Long)
 case class ESImportRequest(channel: Channel, messages: Seq[SlackComment])
 
-class MainActor(es:ActorRef) extends Actor {
+class MainActor(out:ActorRef) extends Actor {
   implicit val timeout = Timeout(5, duration.SECONDS)
 
   // TODO: 並行処理数を制限
@@ -79,13 +76,13 @@ class MainActor(es:ActorRef) extends Actor {
         case Success(actor) =>
           actor ! SlackFetchStart(channel)
         case Failure(e) =>
-          val actor = context.actorOf(Props(classOf[SlackActor], es), channel.name)
+          val actor = context.actorOf(Props(classOf[SlackActor], out), channel.name)
           actor ! SlackFetchStart(channel)
       }
   }
 }
 
-class SlackActor(es:ActorRef) extends Actor {
+class SlackActor(out:ActorRef) extends Actor {
   val conf = ConfigFactory.load()
   implicit val slack = Slack(conf.getString("slack.token"))
 
@@ -101,8 +98,8 @@ class SlackActor(es:ActorRef) extends Actor {
       result match {
         case Right(r) =>
           val messages = r.messages.getOrElse(Seq()) // TODO:結果0件のときのエラー処理
-          es ! ESImportRequest(start.channel, messages)
-          //if(r.has_more.getOrElse(false)) more(start.channel, messages)
+          out ! ESImportRequest(start.channel, messages)
+          if(r.has_more.getOrElse(false)) more(start.channel, messages)
         case Left(e) => // TODO:コメント取得時のエラー処理
       }
 
@@ -111,35 +108,23 @@ class SlackActor(es:ActorRef) extends Actor {
       result match {
         case Right(r) =>
           val messages = r.messages.getOrElse(Seq()) // TODO:結果0件のときのエラー処理
-          es ! ESImportRequest(req.channel, messages)
-          //if(r.has_more.getOrElse(false)) more(req.channel, messages)
+          out ! ESImportRequest(req.channel, messages)
+          if(r.has_more.getOrElse(false)) more(req.channel, messages)
         case Left(e) => // TODO:コメント取得時のエラー処理
       }
   }
 }
 
 class ESActor extends Actor with ActorLogging  {
+  import scala.collection.mutable
+  val data = mutable.Map[String, List[SlackComment]]()
   // TODO: Elasticsearchへのインポート処理
   def receive = {
     case ESImportRequest(channel, messages) =>
-      log.info(channel.name)
-      log.info(messages.head.text)
-  }
-}
-
-
-class Greeter extends Actor {
-  var greeting = ""
-
-  def receive = {
-    case WhoToGreet(who) => greeting = s"hello, $who"
-    case Greet           => sender ! Greeting(greeting) // Send the current greeting back to the sender
-  }
-}
-
-// prints a greeting
-class GreetPrinter extends Actor {
-  def receive = {
-    case Greeting(message) => println(message)
+      data.get(channel.id) match {
+        case Some(v) => data(channel.id) = v ::: messages.toList
+        case _ => data(channel.id) = messages.toList
+      }
+      log.info(data.toString())
   }
 }
