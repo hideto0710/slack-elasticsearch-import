@@ -1,13 +1,13 @@
-package com.hideto0710
+package com.hideto0710.main
 
-import _root_.akka.actor._
+import akka.actor._
+import com.hideto0710.akka.actor.{Channel, ESActor, MainActor}
+import com.hideto0710.slack.SlackApiClient.Slack
+import com.hideto0710.slack._
+import com.hideto0710.util._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
-import com.hideto0710.slack._
-import com.hideto0710.slack.SlackApiClient.Slack
-import com.hideto0710.util._
-import com.hideto0710.akka.actor.{Channel, ESActor, MainActor}
 
 object SlackElasticsearchImport extends App {
 
