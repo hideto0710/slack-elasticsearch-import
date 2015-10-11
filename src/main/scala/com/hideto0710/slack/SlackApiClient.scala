@@ -57,9 +57,9 @@ object SlackJsonProtocol extends DefaultJsonProtocol {
 import SlackJsonProtocol._
 
 /**
- * SlackApiClientのコンパニオンオブジェクト
+ * SlackApiClient
  *
- * SlackAPIへのリクエストに関わるUtilityMethodとFactoryMethodを提供する。
+ * SlackAPIへのリクエストに関わるMethodを提供する。
  * @version 0.1
  */
 object SlackApiClient {
